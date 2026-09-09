@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — Push a Project</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#05060A;--surface:#0D0F1A;--line:#22263F;
+    --text:#F1F3FA;--dim:#7C82A0;--violet:#7C5CFF;--cyan:#00E5C7;
+  }
+  *{box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-serif;margin:0;padding:56px 20px;}
+  .wrap{max-width:640px;margin:0 auto;}
+  h1{font-family:'Space Grotesk',sans-serif;font-size:28px;margin-bottom:6px;}
+  p.sub{color:var(--dim);font-size:14px;margin-bottom:36px;}
+  .card{background:var(--surface);border:1px solid var(--line);padding:28px;margin-bottom:24px;border-radius:4px;}
+  .card h2{font-size:13px;color:var(--cyan);margin:0 0 18px;font-weight:600;font-family:'IBM Plex Mono',monospace;letter-spacing:.02em;}
+  label{display:block;font-size:13px;color:var(--dim);margin:16px 0 6px;}
+  label:first-child{margin-top:0;}
+  input,textarea{
+    width:100%;background:var(--bg);border:1px solid var(--line);color:var(--text);
+    padding:11px 12px;font-family:inherit;font-size:14px;border-radius:3px;
+  }
+  textarea{resize:vertical;min-height:80px;}
+  input:focus,textarea:focus{outline:none;border-color:var(--violet);}
+  button{
+    background:var(--violet);color:#fff;border:none;padding:13px 22px;
+    font-weight:600;font-size:14px;border-radius:999px;cursor:pointer;margin-top:22px;
+  }
+  button:hover{background:#9376ff;}
+  button:disabled{opacity:.5;cursor:not-allowed;}
+  .status{margin-top:16px;font-size:13.5px;padding:12px 14px;border-radius:3px;display:none;font-family:'IBM Plex Mono',monospace;}
+  .status.ok{display:block;background:rgba(0,229,199,.1);color:var(--cyan);border:1px solid var(--cyan);}
+  .status.err{display:block;background:rgba(255,92,92,.1);color:#ff8a8a;border:1px solid #a24545;}
+  .note{font-size:12.5px;color:var(--dim);line-height:1.6;}
+  .note strong{color:var(--text);}
+  a{color:var(--violet);}
+  .plist{display:flex;flex-direction:column;gap:10px;}
+  .plist-item{display:flex;justify-content:space-between;align-items:center;background:var(--bg);border:1px solid var(--line);padding:10px 14px;font-size:13.5px;border-radius:3px;}
+  .plist-item button{margin:0;background:none;border:1px solid var(--line);color:var(--dim);padding:5px 10px;font-size:12px;border-radius:3px;}
+  .plist-item button:hover{color:#ff8a8a;border-color:#a24545;background:none;}
+  .load-btn{background:none;border:1px solid var(--line);color:var(--dim);}
+  .load-btn:hover{color:var(--text);border-color:var(--violet);background:none;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Push a project</h1>
+  <p class="sub">Commits straight to <code>projects.json</code> in your repo. Live on your site within a minute.</p>
+
+  <div class="card">
+    <h2>REPO CONNECTION</h2>
+    <label>GitHub username</label>
+    <input id="ghOwner" placeholder="e.g. basit-dev">
+    <label>Repository name</label>
+    <input id="ghRepo" placeholder="e.g. portfolio">
+    <label>Branch</label>
+    <input id="ghBranch" value="main">
+    <label>Personal Access Token (fine-grained, Contents: Read & Write, this repo only)</label>
+    <input id="ghToken" type="password" placeholder="github_pat_...">
+    <p class="note">
+      <strong>Never commit or share this token.</strong> It lives only in this browser tab's memory — refreshing clears it. Create one at
+      <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com/settings/personal-access-tokens</a>,
+      scoped to just this repository with Contents: Read and write.
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>NEW PROJECT</h2>
+    <label>Title</label>
+    <input id="pTitle" placeholder="e.g. Home Network Security Audit">
+    <label>Description</label>
+    <textarea id="pDesc" placeholder="What it is, what you did, what you used."></textarea>
+    <label>Tags (comma-separated)</label>
+    <input id="pTags" placeholder="Networking, Nmap, Wireshark">
+    <label>Link (optional)</label>
+    <input id="pLink" placeholder="https://github.com/...">
+    <button id="pushBtn">Push to GitHub</button>
+    <div class="status" id="status"></div>
+  </div>
+
+  <div class="card">
+    <h2>CURRENT PROJECTS</h2>
+    <div class="plist" id="plist"><p class="note">Connect above and load to see what's live.</p></div>
+    <button class="load-btn" id="loadBtn">Load current projects</button>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const statusEl = $("status");
+let currentSha = null;
+let currentProjects = [];
+
+function showStatus(msg, ok) {
+  statusEl.textContent = msg;
+  statusEl.className = "status " + (ok ? "ok" : "err");
+}
+function apiUrl() {
+  const owner = $("ghOwner").value.trim();
+  const repo = $("ghRepo").value.trim();
+  return `https://api.github.com/repos/${owner}/${repo}/contents/projects.json`;
+}
+async function fetchProjects() {
+  const token = $("ghToken").value.trim();
+  const branch = $("ghBranch").value.trim() || "main";
+  if (!$("ghOwner").value || !$("ghRepo").value || !token) {
+    showStatus("Fill in username, repo, and token first.", false);
+    return;
+  }
+  try {
+    const res = await fetch(`${apiUrl()}?ref=${branch}`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" }
+    });
+    if (!res.ok) throw new Error(`GitHub returned ${res.status}`);
+    const data = await res.json();
+    currentSha = data.sha;
+    currentProjects = JSON.parse(decodeURIComponent(escape(atob(data.content))));
+    renderList();
+    showStatus("Loaded current projects.json.", true);
+  } catch (e) {
+    showStatus("Couldn't load: " + e.message, false);
+  }
+}
+function renderList() {
+  const list = $("plist");
+  if (!currentProjects.length) { list.innerHTML = `<p class="note">No projects yet.</p>`; return; }
+  list.innerHTML = currentProjects.map((p, i) => `
+    <div class="plist-item"><span>${p.title}</span><button data-i="${i}" class="rm">Remove</button></div>
+  `).join("");
+  list.querySelectorAll(".rm").forEach(btn =>
+    btn.addEventListener("click", () => { currentProjects.splice(+btn.dataset.i, 1); renderList(); })
+  );
+}
+async function pushProjects(commitMsg) {
+  const token = $("ghToken").value.trim();
+  const branch = $("ghBranch").value.trim() || "main";
+  const content = btoa(unescape(encodeURIComponent(JSON.stringify(currentProjects, null, 2))));
+  const res = await fetch(apiUrl(), {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" },
+    body: JSON.stringify({ message: commitMsg, content, sha: currentSha, branch })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || `GitHub returned ${res.status}`);
+  }
+  const data = await res.json();
+  currentSha = data.content.sha;
+}
+$("loadBtn").addEventListener("click", fetchProjects);
+$("pushBtn").addEventListener("click", async () => {
+  const title = $("pTitle").value.trim();
+  const description = $("pDesc").value.trim();
+  const tags = $("pTags").value.split(",").map(t => t.trim()).filter(Boolean);
+  const link = $("pLink").value.trim();
+  if (!title || !description) { showStatus("Add at least a title and description.", false); return; }
+  $("pushBtn").disabled = true;
+  showStatus("Pushing to GitHub…", true);
+  try {
+    if (currentSha === null) await fetchProjects();
+    currentProjects.unshift({ title, description, tags, link });
+    await pushProjects(`Add project: ${title}`);
+    showStatus(`"${title}" pushed. It'll show on your site shortly.`, true);
+    renderList();
+    $("pTitle").value = ""; $("pDesc").value = ""; $("pTags").value = ""; $("pLink").value = "";
+  } catch (e) {
+    showStatus("Push failed: " + e.message, false);
+  } finally {
+    $("pushBtn").disabled = false;
+  }
+});
+</script>
+</body>
+</html>

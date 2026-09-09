@@ -1,0 +1,20 @@
+[
+  {
+    "title": "Home Network Security Audit",
+    "description": "Mapped and hardened a home network — scanned open ports with Nmap, analyzed traffic in Wireshark, and locked down router/DNS settings.",
+    "tags": ["Networking", "Nmap", "Wireshark"],
+    "link": ""
+  },
+  {
+    "title": "Vulnerable Web App Walkthrough",
+    "description": "Worked through OWASP Top 10 vulnerabilities on a deliberately insecure app — SQL injection, XSS, broken auth — and documented fixes for each.",
+    "tags": ["Web Security", "OWASP"],
+    "link": ""
+  },
+  {
+    "title": "Personal Task Tracker",
+    "description": "A full-stack CRUD app for tracking daily tasks, built to practice REST APIs and database design end to end.",
+    "tags": ["Full-Stack", "Node.js"],
+    "link": ""
+  }
+]
